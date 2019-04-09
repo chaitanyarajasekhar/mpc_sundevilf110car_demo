@@ -6,7 +6,7 @@ cmake_minimum_required (VERSION 3.5)
 project(demo_mpc_vesc_mocap)
 add_definitions(-std=c++11 -O3)
 ## Compile as C++11, supported in ROS Kinetic and newer
-# add_compile_options(-std=c++11)
+add_compile_options(-std=c++11)
 set(CXX_FLAGS "-Wall")
 set(CMAKE_CXX_FLAGS "${CXX_FLAGS}")
 

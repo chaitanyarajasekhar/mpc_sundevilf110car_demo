@@ -6,7 +6,7 @@
 using CppAD::AD;
 
 // TODO: Set the timestep length and duration
-size_t N = 10;
+size_t N = 3;
 double dt = 0.1;
 
 // This value assumes the model presented in the classroom is used.
@@ -19,11 +19,11 @@ double dt = 0.1;
 // presented in the classroom matched the previous radius.
 //
 // This is the length from front to CoG that has a similar radius.
-const double Lf = 2.67;
+const double Lf = 0.14;
 
 // Both the reference cross track and orientation errors are 0.
 // The reference velocity is set to 100 mph converted to meters per sec.
-double ref_v = 100 * 0.44704;
+double ref_v = 5 * 0.44704;
 
 // The solver takes all the state variables and actuator
 // variables in a singular vector. Thus, we should to establish
@@ -66,14 +66,14 @@ class FG_eval {
     // Minimize the use of actuators.
     for (t = 0; t < N - 1; t++) {
       fg[0] += 100 * CppAD::pow(vars[delta_start + t], 2) ;
-      fg[0] += 30 * CppAD::pow(vars[a_start + t], 2);
-      //fg[0] += CppAD::pow(vars[a_start + t] * vars[a_start + t], 4);
+      fg[0] += 0.1 * CppAD::pow(vars[a_start + t], 2);
+      fg[0] += 1 * CppAD::pow(vars[a_start + t] * vars[a_start + t], 4);
     }
 
     // Minimize the value gap between sequential actuations.
     for (t = 0; t < N - 2; t++) {
       fg[0] += 1000 * CppAD::pow(vars[delta_start + t + 1] - vars[delta_start + t], 2);
-      fg[0] += 1 * CppAD::pow(vars[a_start + t + 1] - vars[a_start + t], 2);
+      fg[0] += 0.1 * CppAD::pow(vars[a_start + t + 1] - vars[a_start + t], 2);
     }
 
     //
@@ -203,8 +203,8 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   // Acceleration/decceleration upper and lower limits.
   // NOTE: Feel free to change this to something else.
   for (i = a_start; i < n_vars; i++) {
-    vars_lowerbound[i] = -1.0;
-    vars_upperbound[i] = 1.0;
+    vars_lowerbound[i] = -0.3;
+    vars_upperbound[i] = 0.3;
   }
 
   // Lower and upper limits for constraints
