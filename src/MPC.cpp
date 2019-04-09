@@ -22,7 +22,7 @@ double dt = 0.1;
 const double Lf = 0.14;
 
 // Both the reference cross track and orientation errors are 0.
-// The reference velocity is set to 100 mph converted to meters per sec.
+// The reference velocity is set to 5 mph converted to meters per sec.
 double ref_v = 5 * 0.44704;
 
 // The solver takes all the state variables and actuator
