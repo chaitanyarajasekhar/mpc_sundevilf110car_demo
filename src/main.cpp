@@ -23,17 +23,26 @@ class f110car_vesc_mocap
 {
 public:
   ros::NodeHandle nh;
-  ros::Subscriber pose_sub;
-  // ros::Publisher speed_pub, throt_pub, steer_pub;
-  geometry_msgs::PoseStamped pose;
-  geometry_msgs::Quaternion quat;
-  double roll, pitch , yaw;
+  ros::Subscriber pose_sub_car1, pose_sub_car2;
+
+  geometry_msgs::PoseStamped pose_car1, pose_car2;
+  geometry_msgs::Quaternion quat_car1, quat_car2;
+
+
+  double roll_car1, pitch_car1 , yaw_car1;
+  double roll_car2, pitch_car2, yaw_car2;
+
   double current_x, current_z, prev_x, prev_z, current_psi, current_time, previous_time;
+  double current_x_car2, current_z_car2, prev_x_car2, prev_z_car2, current_psi_car2;
+
   double current_throttle, current_steering;
 
-  vector<double> traj_x, traj_y;
+  vector<double> traj_x_car1, traj_y_car1;
+  vector<double> traj_x_car2, traj_y_car2;
 
-  std_msgs::Float64 speed, steer, throt;
+  std_msgs::Float64 speed_car1, steer_car1, throt_car1;
+  std_msgs::Float64 speed_car2, steer_car2, throt_car2;
+
   ros::Time timenow = ros::Time::now() ;
   ros::Time time_var;
 
@@ -43,55 +52,71 @@ public:
   ros::Publisher throt_pub =  nh.advertise<std_msgs::Float64>("commands/motor/duty_cycle",1);
   ros::Publisher steer_pub =  nh.advertise<std_msgs::Float64>("commands/servo/position",1);;
 
-f110car_vesc_mocap(ros::NodeHandle &n){
-  sub();
-}
+  // ros::Publisher speed_pub = nh.advertise<std_msgs::Float64>("commands/motor/speed",1);
+  // ros::Publisher throt_pub =  nh.advertise<std_msgs::Float64>("commands/motor/duty_cycle",1);
+  // ros::Publisher steer_pub =  nh.advertise<std_msgs::Float64>("commands/servo/position",1);
 
-void sub()
-{
-  pose_sub = nh.subscribe("vrpn_client_node/f110car_1/pose",10,&f110car_vesc_mocap::poseCallback,this);
-}
+  f110car_vesc_mocap(ros::NodeHandle &n){
+    sub();
+  }
 
-void poseCallback(const geometry_msgs::PoseStamped::ConstPtr& msg)
-{
-  time_var = msg->header.stamp;
-  pose.header = msg->header;
-  pose.pose = msg->pose;
-  // ROS_INFO("pose_x = [%f]", pose.pose.position.x);
-  quat = msg->pose.orientation;
-  tf::Quaternion quat;
-  tf::quaternionMsgToTF(msg->pose.orientation, quat);
-  tf::Matrix3x3(quat).getRPY(roll,pitch,yaw);
+  void sub()
+  {
+    pose_sub_car1 = nh.subscribe("vrpn_client_node/f110car_1/pose",10,&f110car_vesc_mocap::poseCallback_car1,this);
+    pose_sub_car2 = nh.subscribe("vrpn_client_node/f110car_2/pose",10,&f110car_vesc_mocap::poseCallback_car2,this);
+
+  }
+
+  void poseCallback_car1(const geometry_msgs::PoseStamped::ConstPtr& msg)
+  {
+    time_var = msg->header.stamp;
+    pose_car1.header = msg->header;
+    pose_car1.pose = msg->pose;
+    // ROS_INFO("pose_x = [%f]", pose.pose.position.x);
+    quat_car1 = msg->pose.orientation;
+    tf::Quaternion quat_temp;
+    tf::quaternionMsgToTF(msg->pose.orientation, quat_temp);
+    tf::Matrix3x3(quat_temp).getRPY(roll_car1,pitch_car1,yaw_car1);
 
 
-}
+  }
 
-void publisher(double &throttle, double &steering)
-{
+  void poseCallback_car2(const geometry_msgs::PoseStamped::ConstPtr& msg)
+  {
+    //time_var = msg->header.stamp;
+    pose_car2.header = msg->header;
+    pose_car2.pose = msg->pose;
+    // ROS_INFO("pose_x = [%f]", pose.pose.position.x);
+    quat_car2 = msg->pose.orientation;
+    tf::Quaternion quat_temp;
+    tf::quaternionMsgToTF(msg->pose.orientation, quat_temp);
+    tf::Matrix3x3(quat_temp).getRPY(roll_car2,pitch_car2,yaw_car2);
+  }
 
-    throt.data = throttle;
-    steer.data = steering;
+  void publisher(double &throttle, double &steering)
+  {
+
+    throt_car1.data = throttle;
+    steer_car1.data = steering;
     current_throttle = throttle;
     current_steering = steering;
     ROS_INFO("throttle = [%f], steering = [%f]", throttle, steering);
-    throt_pub.publish(throt);
-    steer_pub.publish(steer);
+    throt_pub.publish(throt_car1);
+    steer_pub.publish(steer_car1);
+  }
 
+  void break_publisher(){
+    speed_car1.data = 0;
+    speed_pub.publish(speed_car1);
+  }
 
-}
-
-void break_publisher(){
-  speed.data = 0;
-  speed_pub.publish(speed);
-}
-
-double pose_(){
-  return pose.pose.position.x;
-}
-
-ros::Time getTime(){
-  return ros::Time::now();
-}
+  // double pose_(){
+  //   return pose_car1.pose.position.x;
+  // }
+  //
+  // ros::Time getTime(){
+  //   return ros::Time::now();
+  // }
 };
 
 
@@ -167,10 +192,10 @@ int main(int argc, char **argv) {
     // ROS_INFO("traj_x,traj_y = [%f , %f]",traj_x_init[j],traj_y_init[j]);
   }
 
-  v1.traj_x = traj_x_init;
-  v1.traj_y = traj_y_init;
+  v1.traj_x_car1 = traj_x_init;
+  v1.traj_y_car1 = traj_y_init;
 
-  ROS_INFO("traj_x_size = [%d]", v1.traj_x.size());
+  ROS_INFO("traj_x_size = [%d]", v1.traj_x_car1.size());
 
   bool initial_cond = true;
   int initial_empty_ros_spin = 10;
@@ -183,10 +208,14 @@ int main(int argc, char **argv) {
   while(ros::ok()){
 
 
-    v1.current_x = round(v1.pose.pose.position.x);
-    v1.current_z = round(v1.pose.pose.position.z);
-    v1.current_psi = v1.pitch;
+    v1.current_x = round(v1.pose_car1.pose.position.x);
+    v1.current_z = round(v1.pose_car1.pose.position.z);
+    v1.current_psi = v1.pitch_car1;
     v1.current_time = v1.time_var.nsec;
+
+    v1.current_x_car2 = round(v1.pose_car2.pose.position.x);
+    v1.current_z_car2 = round(v1.pose_car2.pose.position.z);
+    v1.current_psi_car2 = v1.pitch_car2;
     // ROS_INFO("v1_c_x = [%f] v1_c_y = [%f]  ", v1.current_x, v1.current_z);
     // ROS_INFO(" trajectory size while loop starting [%ld]", v1.traj_x.size());
 
@@ -229,13 +258,13 @@ int main(int argc, char **argv) {
       size_t i = 0;
 
       // selecting points infront of the car
-      while(v1.traj_x[i] < px && v1.traj_x.size() > 0){
+      while(v1.traj_x_car1[i] < px && v1.traj_x_car1.size() > 0){
         i = i+1;
       }
 
-      for (; i < v1.traj_x.size();i++){
-        ptsx.push_back(v1.traj_x[i]);
-        ptsy.push_back(v1.traj_y[i]);
+      for (; i < v1.traj_x_car1.size();i++){
+        ptsx.push_back(v1.traj_x_car1[i]);
+        ptsy.push_back(v1.traj_y_car1[i]);
       }
 
       // end the ros-spin loop if trajectory size is less than 4 because polyfit fnction need atleast size 3
@@ -286,6 +315,9 @@ int main(int argc, char **argv) {
       ROS_INFO("cte = [%f] epsi = [%f]", state[4], state[5]);
       //compute the actuator values
       vector<double> result = mpc.Solve(state, coeffs);
+
+      std::cout << "result size = ["<< result.size() << "]\n";
+
       steer_value = result[0];
       steer_value =  (1-(steer_value/deg2rad(25)))/2;
       throttle_value = result[1];
@@ -297,6 +329,11 @@ int main(int argc, char **argv) {
     v1.prev_x = v1.current_x;
     v1.prev_z = v1.current_z;
     v1.previous_time = v1.current_time;
+
+    v1.prev_x_car2 = v1.current_x_car2;
+    v1.prev_z_car2 = v1.current_z_car2;
+
+    ROS_INFO("car 2: prev_x = [%f] prev_y = [%f]", v1.prev_x_car2, v1.prev_z_car2);
 
     rate.sleep();
     ros::spinOnce();
