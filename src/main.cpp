@@ -15,6 +15,24 @@
 #include <tf/tf.h>
 #include <tf/transform_datatypes.h>
 
+/*************************************************************************************/
+// functions to convert from degrees to radians and vice versa
+
+constexpr double pi() { return M_PI; }
+double deg2rad(double x) { return x * pi() / 180; }
+double rad2deg(double x) { return x * 180 / pi(); }
+
+double round(double var)
+{
+    // 37.66666 * 100 =3766.66
+    // 3766.66 + .5 =37.6716    for rounding off value
+    // then type cast to int so value is 3766
+    // then divided by 100 so the value converted into 37.66
+    double value = (int)(var * 100 + .5);
+    return (double)value / 100;
+}
+
+
 /***************** **********************************************************************/
 // class to handle publisher and subscriber for vesc and motion capture
 //--------------------------------------------------------------------------------------//
@@ -34,6 +52,9 @@ public:
 
   double current_x, current_z, prev_x, prev_z, current_psi, current_time, previous_time;
   double current_x_car2, current_z_car2, prev_x_car2, prev_z_car2, current_psi_car2;
+
+  double prev_velocity_car2, prev_acc_car2;
+
 
   double current_throttle, current_steering;
 
@@ -58,6 +79,7 @@ public:
 
   f110car_vesc_mocap(ros::NodeHandle &n){
     sub();
+    prev_velocity_car2 = 0; prev_acc_car2 = 0;
   }
 
   void sub()
@@ -96,10 +118,10 @@ public:
   void publisher(double &throttle, double &steering)
   {
 
-    throt_car1.data = throttle;
-    steer_car1.data = steering;
     current_throttle = throttle;
     current_steering = steering;
+    steer_car1.data =  (1-(steering/deg2rad(25)))/2;
+    throt_car1.data = throttle;
     ROS_INFO("throttle = [%f], steering = [%f]", throttle, steering);
     throt_pub.publish(throt_car1);
     steer_pub.publish(steer_car1);
@@ -121,22 +143,6 @@ public:
 
 
 
-/*************************************************************************************/
-// functions to convert from degrees to radians and vice versa
-
-constexpr double pi() { return M_PI; }
-double deg2rad(double x) { return x * pi() / 180; }
-double rad2deg(double x) { return x * 180 / pi(); }
-
-double round(double var)
-{
-    // 37.66666 * 100 =3766.66
-    // 3766.66 + .5 =37.6716    for rounding off value
-    // then type cast to int so value is 3766
-    // then divided by 100 so the value converted into 37.66
-    double value = (int)(var * 100 + .5);
-    return (double)value / 100;
-}
 
 
 //
@@ -204,6 +210,10 @@ int main(int argc, char **argv) {
   int r = 10;
   ros::Rate rate(r);
 
+  rate.sleep();
+  rate.sleep();
+  rate.sleep();
+
 
   while(ros::ok()){
 
@@ -247,7 +257,11 @@ int main(int argc, char **argv) {
       double throttle_value = car_pub_sub_node.current_throttle;
       double steer_value = car_pub_sub_node.current_steering;
 
+      double velocity_car2 = sqrt(pow((car_pub_sub_node.current_x_car2 - car_pub_sub_node.prev_x_car2),2)+ pow((car_pub_sub_node.current_z_car2 - car_pub_sub_node.prev_z_car2),2))*10;
+      double acc_car2 = (velocity_car2 -  car_pub_sub_node.prev_velocity_car2) * 10;
+
       ROS_INFO("px = [%f] py = [%f] psi = [%f] v = [%f] dt = [%f]", px, py, psi, v, time_diff);
+      ROS_INFO("px_car2 = [%f] py_car2 = [%f] psi_car2 = [%f] v = [%f] acc = [%f]", car_pub_sub_node.current_x_car2, car_pub_sub_node.current_z_car2, car_pub_sub_node.current_psi_car2, velocity_car2, acc_car2);
 
 
 
@@ -315,13 +329,25 @@ int main(int argc, char **argv) {
       ROS_INFO("cte = [%f] epsi = [%f]", state[4], state[5]);
       //compute the actuator values
 
-      Eigen::VectorXd state_other_car(6);
+      Eigen::VectorXd state_other_car(7);
       state_other_car.fill(0.0);
 
-      double dx = car_pub_sub_node.current_x_car2 - px;
-      double dy = car_pub_sub_node.current_z_car2 - py;
-      state_other_car[0] = dx * cos(-psi) - dy * sin(-psi);
-      state_other_car[1] = dx * sin(-psi) + dy * cos(-psi);
+      double psi_car2 = car_pub_sub_node.current_psi_car2;
+
+      // state_other_car[0] = car_pub_sub_node.current_x_car2 + velocity_car2 * cos(psi_car2) *latency;
+      // state_other_car[1] = car_pub_sub_node.current_z_car2 - velocity_car2 * sin(psi_car2) * latency;
+      // state_other_car[2] = psi_car2;
+      // state_other_car[3] = velocity_car2 + acc_car2 * latency;
+
+      state_other_car[0] = -1.39 + velocity_car2 * cos(psi_car2) *latency;
+      state_other_car[1] = 0.47 - velocity_car2 * sin(psi_car2) * latency;
+      state_other_car[2] = 0;
+      state_other_car[3] = velocity_car2 + acc_car2 * latency;
+
+      // including the px py psi of car1
+      state_other_car[4] = px;
+      state_other_car[5] = py;
+      state_other_car[6] = psi;
 
       // double dx = -1.48 - px;
       // double dy = 0.50 - py;
@@ -330,12 +356,13 @@ int main(int argc, char **argv) {
 
       vector<double> result = mpc.Solve(state, coeffs,state_other_car);
 
-      std::cout << "result size = ["<< result.size() << "]\n";
-
       steer_value = result[0];
-      steer_value =  (1-(steer_value/deg2rad(25)))/2;
       throttle_value = result[1];
       car_pub_sub_node.publisher(throttle_value,steer_value);
+
+
+      car_pub_sub_node.prev_velocity_car2 = velocity_car2;
+      //car_pub_sub_node.prev_acc_car2 = acc_car2;
     }
 
 
@@ -346,8 +373,6 @@ int main(int argc, char **argv) {
 
     car_pub_sub_node.prev_x_car2 = car_pub_sub_node.current_x_car2;
     car_pub_sub_node.prev_z_car2 = car_pub_sub_node.current_z_car2;
-
-    ROS_INFO("car 2: prev_x = [%f] prev_y = [%f]", car_pub_sub_node.prev_x_car2, car_pub_sub_node.prev_z_car2);
 
     rate.sleep();
     ros::spinOnce();

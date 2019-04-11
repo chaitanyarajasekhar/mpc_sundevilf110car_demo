@@ -2,6 +2,8 @@
 #include <cppad/cppad.hpp>
 #include <cppad/ipopt/solve.hpp>
 #include "Eigen-3.3/Eigen/Core"
+#include "ros/ros.h"
+
 
 using CppAD::AD;
 
@@ -41,11 +43,44 @@ class FG_eval {
  public:
   // Fitted polynomial coefficients
   Eigen::VectorXd coeffs;
-  Eigen::VectorXd state_other_car;
+  Eigen::VectorXd var_other_car;
 
   FG_eval(Eigen::VectorXd coeffs, Eigen::VectorXd state_other_car) {
     this->coeffs = coeffs;
-    this->state_other_car = state_other_car;
+
+    Eigen::VectorXd vars_temp(psi_start+1);
+    vars_temp.fill(0.0);
+
+    double psi  = state_other_car[6];
+    double psi_car2 = state_other_car[2];
+
+    double px = state_other_car[4];
+    double py = state_other_car[5];
+
+    double px_car2 = state_other_car[0];
+    double py_car2 = state_other_car[1];
+    double vel_car2 = state_other_car[3];
+
+    size_t t = 0;
+    for (; t < N; t++)
+    {
+      double dx =  px_car2 + (vel_car2 * dt *t * cos(psi_car2)) - px;
+      double dy =  py_car2 - (vel_car2 * dt *t * sin(psi_car2)) - py;
+
+      vars_temp[x_start+t] = dx * cos(-psi) - dy * sin(-psi);
+      vars_temp[y_start+t] = dx * sin(-psi) + dy * cos(-psi);
+
+      ROS_INFO("vars_temp_x =[%f], vars_temp_z = [%f]",vars_temp[x_start+t],vars_temp[y_start+t]);
+
+    }
+
+    var_other_car = vars_temp;
+
+
+
+
+
+    //this->state_other_car = state_other_car;
   }
 
 
@@ -68,19 +103,19 @@ class FG_eval {
       fg[0] += 100 * CppAD::pow(vars[cte_start + t], 2);
       fg[0] += 3 * CppAD::pow(vars[epsi_start + t], 2);
       fg[0] += 1 * CppAD::pow(vars[v_start + t] - ref_v, 2);
-      fg[0] += 10 * CppAD::exp(-1* CppAD::pow(vars[x_start + t] - state_other_car[0], 2) + CppAD::pow(vars[y_start + t] - state_other_car[1], 2));
+      fg[0] += 100 * CppAD::exp(-1* CppAD::pow(vars[x_start + t] - var_other_car[x_start + t], 2) + CppAD::pow(vars[y_start + t] - var_other_car[y_start + t], 2));
     }
 
     // Minimize the use of actuators.
     for (t = 0; t < N - 1; t++) {
-      fg[0] += 10 * CppAD::pow(vars[delta_start + t], 2) ;
+      fg[0] += 1 * CppAD::pow(vars[delta_start + t], 2) ;
       fg[0] += 0.1 * CppAD::pow(vars[a_start + t], 2);
       fg[0] += 1 * CppAD::pow(vars[a_start + t] * vars[a_start + t], 4);
     }
 
     // Minimize the value gap between sequential actuations.
     for (t = 0; t < N - 2; t++) {
-      fg[0] += 100 * CppAD::pow(vars[delta_start + t + 1] - vars[delta_start + t], 2);
+      fg[0] += 10 * CppAD::pow(vars[delta_start + t + 1] - vars[delta_start + t], 2);
       fg[0] += 0.1 * CppAD::pow(vars[a_start + t + 1] - vars[a_start + t], 2);
     }
 
