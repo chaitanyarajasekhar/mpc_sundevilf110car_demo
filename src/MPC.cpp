@@ -41,7 +41,14 @@ class FG_eval {
  public:
   // Fitted polynomial coefficients
   Eigen::VectorXd coeffs;
-  FG_eval(Eigen::VectorXd coeffs) { this->coeffs = coeffs; }
+  Eigen::VectorXd state_other_car;
+
+  FG_eval(Eigen::VectorXd coeffs, Eigen::VectorXd state_other_car) {
+    this->coeffs = coeffs;
+    this->state_other_car = state_other_car;
+  }
+
+
 
   typedef CPPAD_TESTVECTOR(AD<double>) ADvector;
   void operator()(ADvector& fg, const ADvector& vars) {
@@ -58,21 +65,22 @@ class FG_eval {
 
     // The part of the cost based on the reference state.
     for (t = 0; t < N; t++) {
-      fg[0] += 10 * CppAD::pow(vars[cte_start + t], 2);
+      fg[0] += 100 * CppAD::pow(vars[cte_start + t], 2);
       fg[0] += 3 * CppAD::pow(vars[epsi_start + t], 2);
       fg[0] += 1 * CppAD::pow(vars[v_start + t] - ref_v, 2);
+      fg[0] += 10 * CppAD::exp(-1* CppAD::pow(vars[x_start + t] - state_other_car[0], 2) + CppAD::pow(vars[y_start + t] - state_other_car[1], 2));
     }
 
     // Minimize the use of actuators.
     for (t = 0; t < N - 1; t++) {
-      fg[0] += 100 * CppAD::pow(vars[delta_start + t], 2) ;
+      fg[0] += 10 * CppAD::pow(vars[delta_start + t], 2) ;
       fg[0] += 0.1 * CppAD::pow(vars[a_start + t], 2);
       fg[0] += 1 * CppAD::pow(vars[a_start + t] * vars[a_start + t], 4);
     }
 
     // Minimize the value gap between sequential actuations.
     for (t = 0; t < N - 2; t++) {
-      fg[0] += 1000 * CppAD::pow(vars[delta_start + t + 1] - vars[delta_start + t], 2);
+      fg[0] += 100 * CppAD::pow(vars[delta_start + t + 1] - vars[delta_start + t], 2);
       fg[0] += 0.1 * CppAD::pow(vars[a_start + t + 1] - vars[a_start + t], 2);
     }
 
@@ -146,7 +154,7 @@ class FG_eval {
 MPC::MPC() {}
 MPC::~MPC() {}
 
-vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
+vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs, Eigen::VectorXd state_other_car) {
   bool ok = true;
   size_t i;
   typedef CPPAD_TESTVECTOR(double) Dvector;
@@ -203,7 +211,8 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   // Acceleration/decceleration upper and lower limits.
   // NOTE: Feel free to change this to something else.
   for (i = a_start; i < n_vars; i++) {
-    vars_lowerbound[i] = -0.3;
+    vars_lowerbound[i] = 0;
+    // vars_lowerbound[i] = -0.3;
     vars_upperbound[i] = 0.3;
   }
 
@@ -231,7 +240,7 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   constraints_upperbound[epsi_start] = epsi;
 
   // object that computes objective and constraints
-  FG_eval fg_eval(coeffs);
+  FG_eval fg_eval(coeffs, state_other_car);
 
   //
   // NOTE: You don't have to worry about these options

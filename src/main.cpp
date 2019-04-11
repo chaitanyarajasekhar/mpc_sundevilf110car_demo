@@ -181,7 +181,7 @@ int main(int argc, char **argv) {
   ros::NodeHandle n;
 
   MPC mpc;
-  f110car_vesc_mocap v1(n);
+  f110car_vesc_mocap car_pub_sub_node(n);
 
   // initializing a hardcoded trajectory
   vector<double> traj_x_init, traj_y_init;
@@ -192,10 +192,10 @@ int main(int argc, char **argv) {
     // ROS_INFO("traj_x,traj_y = [%f , %f]",traj_x_init[j],traj_y_init[j]);
   }
 
-  v1.traj_x_car1 = traj_x_init;
-  v1.traj_y_car1 = traj_y_init;
+  car_pub_sub_node.traj_x_car1 = traj_x_init;
+  car_pub_sub_node.traj_y_car1 = traj_y_init;
 
-  ROS_INFO("traj_x_size = [%d]", v1.traj_x_car1.size());
+  ROS_INFO("traj_x_size = [%d]", car_pub_sub_node.traj_x_car1.size());
 
   bool initial_cond = true;
   int initial_empty_ros_spin = 10;
@@ -208,14 +208,14 @@ int main(int argc, char **argv) {
   while(ros::ok()){
 
 
-    v1.current_x = round(v1.pose_car1.pose.position.x);
-    v1.current_z = round(v1.pose_car1.pose.position.z);
-    v1.current_psi = v1.pitch_car1;
-    v1.current_time = v1.time_var.nsec;
+    car_pub_sub_node.current_x = round(car_pub_sub_node.pose_car1.pose.position.x);
+    car_pub_sub_node.current_z = round(car_pub_sub_node.pose_car1.pose.position.z);
+    car_pub_sub_node.current_psi = car_pub_sub_node.pitch_car1;
+    car_pub_sub_node.current_time = car_pub_sub_node.time_var.nsec;
 
-    v1.current_x_car2 = round(v1.pose_car2.pose.position.x);
-    v1.current_z_car2 = round(v1.pose_car2.pose.position.z);
-    v1.current_psi_car2 = v1.pitch_car2;
+    car_pub_sub_node.current_x_car2 = round(car_pub_sub_node.pose_car2.pose.position.x);
+    car_pub_sub_node.current_z_car2 = round(car_pub_sub_node.pose_car2.pose.position.z);
+    car_pub_sub_node.current_psi_car2 = car_pub_sub_node.pitch_car2;
     // ROS_INFO("v1_c_x = [%f] v1_c_y = [%f]  ", v1.current_x, v1.current_z);
     // ROS_INFO(" trajectory size while loop starting [%ld]", v1.traj_x.size());
 
@@ -228,7 +228,7 @@ int main(int argc, char **argv) {
       initial_cond = false;
       initial_empty_ros_spin = initial_empty_ros_spin -1;
       double a =0.0, b = 0.5;
-      v1.publisher(a,b);
+      car_pub_sub_node.publisher(a,b);
       // ROS_INFO("traj_x_size in if block= [%d]", v1.traj_x.size());
 
     }
@@ -239,13 +239,13 @@ int main(int argc, char **argv) {
       double time_diff = 0.1;
 
       // double v = sqrt(pow((v1.current_x - v1.prev_x),2)+ pow((v1.current_z - v1.prev_z),2))/time_diff;
-      double v = sqrt(pow((v1.current_x - v1.prev_x),2)+ pow((v1.current_z - v1.prev_z),2))*10;
+      double v = sqrt(pow((car_pub_sub_node.current_x - car_pub_sub_node.prev_x),2)+ pow((car_pub_sub_node.current_z - car_pub_sub_node.prev_z),2))*10;
 
-      double px = v1.current_x;
-      double py = v1.current_z;
-      double psi = v1.current_psi;
-      double throttle_value = v1.current_throttle;
-      double steer_value = v1.current_steering;
+      double px = car_pub_sub_node.current_x;
+      double py = car_pub_sub_node.current_z;
+      double psi = car_pub_sub_node.current_psi;
+      double throttle_value = car_pub_sub_node.current_throttle;
+      double steer_value = car_pub_sub_node.current_steering;
 
       ROS_INFO("px = [%f] py = [%f] psi = [%f] v = [%f] dt = [%f]", px, py, psi, v, time_diff);
 
@@ -258,18 +258,18 @@ int main(int argc, char **argv) {
       size_t i = 0;
 
       // selecting points infront of the car
-      while(v1.traj_x_car1[i] < px && v1.traj_x_car1.size() > 0){
+      while(car_pub_sub_node.traj_x_car1[i] < px && car_pub_sub_node.traj_x_car1.size() > 0){
         i = i+1;
       }
 
-      for (; i < v1.traj_x_car1.size();i++){
-        ptsx.push_back(v1.traj_x_car1[i]);
-        ptsy.push_back(v1.traj_y_car1[i]);
+      for (; i < car_pub_sub_node.traj_x_car1.size();i++){
+        ptsx.push_back(car_pub_sub_node.traj_x_car1[i]);
+        ptsy.push_back(car_pub_sub_node.traj_y_car1[i]);
       }
 
       // end the ros-spin loop if trajectory size is less than 4 because polyfit fnction need atleast size 3
       if (ptsx.size() < 4){
-        v1.break_publisher();
+        car_pub_sub_node.break_publisher();
         rate.sleep();
 
         ros::shutdown();
@@ -314,26 +314,40 @@ int main(int argc, char **argv) {
 
       ROS_INFO("cte = [%f] epsi = [%f]", state[4], state[5]);
       //compute the actuator values
-      vector<double> result = mpc.Solve(state, coeffs);
+
+      Eigen::VectorXd state_other_car(6);
+      state_other_car.fill(0.0);
+
+      double dx = car_pub_sub_node.current_x_car2 - px;
+      double dy = car_pub_sub_node.current_z_car2 - py;
+      state_other_car[0] = dx * cos(-psi) - dy * sin(-psi);
+      state_other_car[1] = dx * sin(-psi) + dy * cos(-psi);
+
+      // double dx = -1.48 - px;
+      // double dy = 0.50 - py;
+      // state_other_car[0] = dx * cos(-psi) - dy * sin(-psi);
+      // state_other_car[1] = dx * sin(-psi) + dy * cos(-psi);
+
+      vector<double> result = mpc.Solve(state, coeffs,state_other_car);
 
       std::cout << "result size = ["<< result.size() << "]\n";
 
       steer_value = result[0];
       steer_value =  (1-(steer_value/deg2rad(25)))/2;
       throttle_value = result[1];
-      v1.publisher(throttle_value,steer_value);
+      car_pub_sub_node.publisher(throttle_value,steer_value);
     }
 
 
 
-    v1.prev_x = v1.current_x;
-    v1.prev_z = v1.current_z;
-    v1.previous_time = v1.current_time;
+    car_pub_sub_node.prev_x = car_pub_sub_node.current_x;
+    car_pub_sub_node.prev_z = car_pub_sub_node.current_z;
+    car_pub_sub_node.previous_time = car_pub_sub_node.current_time;
 
-    v1.prev_x_car2 = v1.current_x_car2;
-    v1.prev_z_car2 = v1.current_z_car2;
+    car_pub_sub_node.prev_x_car2 = car_pub_sub_node.current_x_car2;
+    car_pub_sub_node.prev_z_car2 = car_pub_sub_node.current_z_car2;
 
-    ROS_INFO("car 2: prev_x = [%f] prev_y = [%f]", v1.prev_x_car2, v1.prev_z_car2);
+    ROS_INFO("car 2: prev_x = [%f] prev_y = [%f]", car_pub_sub_node.prev_x_car2, car_pub_sub_node.prev_z_car2);
 
     rate.sleep();
     ros::spinOnce();
