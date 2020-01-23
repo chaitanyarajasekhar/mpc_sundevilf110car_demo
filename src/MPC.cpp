@@ -70,11 +70,18 @@ class FG_eval {
       vars_temp[x_start+t] = dx * cos(-psi) - dy * sin(-psi);
       vars_temp[y_start+t] = dx * sin(-psi) + dy * cos(-psi);
 
-      ROS_INFO("vars_temp_x =[%f], vars_temp_z = [%f]",vars_temp[x_start+t],vars_temp[y_start+t]);
+      //ROS_INFO("vars_temp_x =[%f], vars_temp_z = [%f]",vars_temp[x_start+t],vars_temp[y_start+t]);
 
     }
 
     var_other_car = vars_temp;
+
+    t = 0;
+    for (; t < N; t++)
+    {
+      ROS_INFO("vars_temp_x =[%f], vars_temp_z = [%f]",var_other_car[x_start+t],var_other_car[y_start+t]);
+
+    }
 
 
 
@@ -100,23 +107,23 @@ class FG_eval {
 
     // The part of the cost based on the reference state.
     for (t = 0; t < N; t++) {
-      fg[0] += 100 * CppAD::pow(vars[cte_start + t], 2);
-      fg[0] += 3 * CppAD::pow(vars[epsi_start + t], 2);
-      fg[0] += 1 * CppAD::pow(vars[v_start + t] - ref_v, 2);
+      fg[0] += 10 * CppAD::pow(vars[cte_start + t], 2);
+      fg[0] += 1 * CppAD::pow(vars[epsi_start + t], 2);
+      fg[0] += 10 * CppAD::pow(vars[v_start + t] - ref_v, 2);
       fg[0] += 100 * CppAD::exp(-1* CppAD::pow(vars[x_start + t] - var_other_car[x_start + t], 2) + CppAD::pow(vars[y_start + t] - var_other_car[y_start + t], 2));
     }
 
     // Minimize the use of actuators.
     for (t = 0; t < N - 1; t++) {
       fg[0] += 1 * CppAD::pow(vars[delta_start + t], 2) ;
-      fg[0] += 0.1 * CppAD::pow(vars[a_start + t], 2);
+      fg[0] += 1 * CppAD::pow(vars[a_start + t], 2);
       fg[0] += 1 * CppAD::pow(vars[a_start + t] * vars[a_start + t], 4);
     }
 
     // Minimize the value gap between sequential actuations.
     for (t = 0; t < N - 2; t++) {
-      fg[0] += 10 * CppAD::pow(vars[delta_start + t + 1] - vars[delta_start + t], 2);
-      fg[0] += 0.1 * CppAD::pow(vars[a_start + t + 1] - vars[a_start + t], 2);
+      fg[0] += 1 * CppAD::pow(vars[delta_start + t + 1] - vars[delta_start + t], 2);
+      fg[0] += 1 * CppAD::pow(vars[a_start + t + 1] - vars[a_start + t], 2);
     }
 
     //

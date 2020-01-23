@@ -122,7 +122,7 @@ public:
     current_steering = steering;
     steer_car1.data =  (1-(steering/deg2rad(25)))/2;
     throt_car1.data = throttle;
-    ROS_INFO("throttle = [%f], steering = [%f]", throttle, steering);
+    ROS_INFO("throttle = [%f], steering = [%f]", throt_car1.data, steer_car1.data);
     throt_pub.publish(throt_car1);
     steer_pub.publish(steer_car1);
   }
@@ -334,15 +334,15 @@ int main(int argc, char **argv) {
 
       double psi_car2 = car_pub_sub_node.current_psi_car2;
 
-      // state_other_car[0] = car_pub_sub_node.current_x_car2 + velocity_car2 * cos(psi_car2) *latency;
-      // state_other_car[1] = car_pub_sub_node.current_z_car2 - velocity_car2 * sin(psi_car2) * latency;
-      // state_other_car[2] = psi_car2;
-      // state_other_car[3] = velocity_car2 + acc_car2 * latency;
-
-      state_other_car[0] = -1.39 + velocity_car2 * cos(psi_car2) *latency;
-      state_other_car[1] = 0.47 - velocity_car2 * sin(psi_car2) * latency;
-      state_other_car[2] = 0;
+      state_other_car[0] = car_pub_sub_node.current_x_car2 + velocity_car2 * cos(psi_car2) *latency;
+      state_other_car[1] = car_pub_sub_node.current_z_car2 - velocity_car2 * sin(psi_car2) * latency;
+      state_other_car[2] = psi_car2;
       state_other_car[3] = velocity_car2 + acc_car2 * latency;
+
+      // state_other_car[0] = -1.39 + velocity_car2 * cos(psi_car2) *latency;
+      // state_other_car[1] = 0.47 - velocity_car2 * sin(psi_car2) * latency;
+      // state_other_car[2] = 0;
+      // state_other_car[3] = velocity_car2 + acc_car2 * latency;
 
       // including the px py psi of car1
       state_other_car[4] = px;
